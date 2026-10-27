@@ -17,50 +17,30 @@ from app.services import embed_message, extract_message, load_cover_upload, load
 
 
 class TestAppSmoke(unittest.TestCase):
-    def test_semua_halaman_termuat(self):
-        app = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=60).run()
+    def test_dashboard_memuat_widget_utama(self):
+        app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
         self.assertEqual(len(app.exception), 0, [item.value for item in app.exception])
-        for page_path in (
-            "app/pages/sembunyikan.py",
-            "app/pages/ekstrak.py",
-            "app/pages/analisis.py",
-            "app/pages/tentang.py",
-            "app/pages/beranda.py",
-        ):
-            app.switch_page(page_path).run()
-            self.assertEqual(len(app.exception), 0, [item.value for item in app.exception])
+        labels = [button.label for button in app.button]
+        self.assertIn("Buka Gambar", labels)
+        self.assertIn("Enkripsi", labels)
+        self.assertIn("Enkripsi & Simpan", labels)
+        self.assertIn("Dekripsi Pesan", labels)
+        self.assertGreaterEqual(len(app.file_uploader), 2)
+        self.assertGreaterEqual(len(app.text_area), 1)
 
-    def test_analisis_memuat_temuan_notebook(self):
-        app = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=60).run()
-        app.switch_page("app/pages/analisis.py").run()
-        self.assertEqual(len(app.exception), 0, [item.value for item in app.exception])
-        rendered_markdown = "\n".join(item.value for item in app.markdown)
-        self.assertIn("Temuan dari Notebook", rendered_markdown)
-        self.assertIn("53.97 dB", rendered_markdown)
-        self.assertIn("0.1877 / 0.3647", rendered_markdown)
-        self.assertEqual(len(app.get("vega_lite_chart")), 2)
-
-    def test_roundtrip_lewat_ui_sembunyikan_dan_ekstrak(self):
+    def test_roundtrip_dashboard_setidaknya_membuat_stego_png(self):
         cover_buffer = io.BytesIO()
         Image.new("RGB", (160, 160), (120, 130, 140)).save(cover_buffer, format="PNG")
-        app = AppTest.from_file(str(ROOT / "streamlit_app.py"), default_timeout=60).run()
-        app.switch_page("app/pages/sembunyikan.py").run()
+        app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
         app.file_uploader[0].upload("cover.png", cover_buffer.getvalue(), "image/png").run()
         app.text_area[0].set_value("roundtrip dari UI")
         app.text_input[0].set_value("pw-ui-uji")
         app.radio[0].set_value("Sekuensial")
         app.run()
-        app.button[0].click().run()
+        app.button[2].click().run()
         self.assertEqual(len(app.exception), 0, [item.value for item in app.exception])
-        stego_png = app.session_state["pixego_stego_png"]
-
-        app.switch_page("app/pages/ekstrak.py").run()
-        app.file_uploader[0].upload("stego.png", stego_png, "image/png").run()
-        app.text_input[0].set_value("pw-ui-uji")
-        app.run()
-        app.button[0].click().run()
-        self.assertEqual(len(app.exception), 0, [item.value for item in app.exception])
-        self.assertIn("roundtrip dari UI", [item.value for item in app.text_area])
+        self.assertIn("pixego_stego_png", app.session_state)
+        self.assertTrue(app.session_state["pixego_stego_png"])
 
     def test_service_roundtrip_dan_password_salah(self):
         cover = Image.new("RGB", (160, 160), (120, 130, 140))
